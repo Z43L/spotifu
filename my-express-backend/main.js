@@ -33,6 +33,7 @@ app.get('/login', (req, res) => {
 });
 
 // Callback route to handle Spotify's response
+// Callback route to handle Spotify's response
 app.get('/callback', async (req, res) => {
     const { code, state } = req.query;
     if (!code || !state) {
@@ -58,13 +59,15 @@ app.get('/callback', async (req, res) => {
         const { access_token, refresh_token } = tokenResponse.data;
         console.log('Access Token:', access_token);
         console.log('Refresh Token:', refresh_token);
-        // In a real app, you'd store these tokens securely and use them for API requests
-        res.send('You are now logged in!');
+        // Redirect back to the Expo app with the access token in the URL
+        const redirectUrl = `exp://192.168.1.4:8081?accessToken=${encodeURIComponent(access_token)}`; //Change the URL with your project url
+        res.redirect(redirectUrl);
     } catch (error) {
         console.error('Error exchanging code for tokens:', error);
         res.status(500).json({ error: 'Failed to exchange code for tokens' });
     }
 });
+
 
 app.listen(port, () => {
     console.log(`Server is listening on port ${port}`);
