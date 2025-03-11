@@ -11,7 +11,7 @@ const port = process.env.PORT || 3000;
 // Spotify API Credentials
 const CLIENT_ID = 'b3bd33f41d9d42e498fa2fcf8b0e5d92'; // Replace with your actual Client ID
 const CLIENT_SECRET = '13d125bdb3e44508a60f6eb195f654e9'; // Replace with your actual Client Secret
-const REDIRECT_URI = 'http://localhost:3000/callback';
+const REDIRECT_URI = 'https://spotifu.onrender.com/callback';
 
 app.use(cors());
 app.use(bodyParser.json());

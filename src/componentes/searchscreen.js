@@ -5,23 +5,71 @@ import { AntDesign } from "@expo/vector-icons";
 import { ImageBackground } from 'react-native';
 import axios from "axios";
 import * as WebBrowser from 'expo-web-browser'; // Import WebBrowser
+import * as SecureStore from 'expo-secure-store';
+import SpotifyWebApi from 'spotify-web-api-js';
 
 WebBrowser.maybeCompleteAuthSession(); // Add this
+
+const spotifyApi = new SpotifyWebApi();
 
 function SearchScreen() {
     const navigation = useNavigation();
     const [value, onChangeText] = useState('')
     const [songs, setSongs] = useState([]);
     const [isSpotifyLoggedIn, setIsSpotifyLoggedIn] = useState(false); // State to track Spotify login
+    const [accessToken, setAccessToken] = useState(null);
+    const SPOTIFY_CLIENT_ID = 'b3bd33f41d9d42e498fa2fcf8b0e5d92'; // Replace with your Spotify Client ID
+
+    useEffect(() => {
+        // Check if an access token is already stored
+        const checkStoredToken = async () => {
+            const storedToken = await SecureStore.getItemAsync('spotifyAccessToken');
+            if (storedToken) {
+                setAccessToken(storedToken);
+                setIsSpotifyLoggedIn(true);
+                spotifyApi.setAccessToken(storedToken);
+                fetchSongsFromSpotify(storedToken); // Fetch songs immediately
+            }
+        };
+        checkStoredToken();
+    }, []);
 
     const handleSpotifyLogin = async () => {
         try {
-            const result = await WebBrowser.openAuthSessionAsync('http://192.168.1.5:3000/login'); // Replace with your IP address
-            console.log('Login result:', result);
-            // You can handle the result here if needed
-            setIsSpotifyLoggedIn(true); // Set the state to true after login
+            // This is the URL of your backend route for handling Spotify authentication
+            const redirectUrl = await WebBrowser.openAuthSessionAsync(`https://spotifu.onrender.com/login`);
+        
+            if (redirectUrl) {
+              // Extract access token from URL
+                const tokenMatch = redirectUrl.url.match(/accessToken=([^&]*)/);
+                if (tokenMatch && tokenMatch[1]) {
+                    const newAccessToken = decodeURIComponent(tokenMatch[1]);
+                    setAccessToken(newAccessToken);
+                    spotifyApi.setAccessToken(newAccessToken);
+                    await SecureStore.setItemAsync('spotifyAccessToken', newAccessToken);
+                    setIsSpotifyLoggedIn(true);
+                    fetchSongsFromSpotify(newAccessToken); // Fetch songs immediately
+                }
+            }
         } catch (error) {
             console.error('Error during Spotify login:', error);
+        }
+    };
+
+    const fetchSongsFromSpotify = async (token) => {
+        try {
+            if (token) {
+                const searchResult = await spotifyApi.searchTracks(value === '' ? 'a' : value); // Search for 'a' if no search term
+                const foundSongs = searchResult.tracks.items.map((track) => ({
+                    id: track.id,
+                    title: track.name,
+                    artist: track.artists.map((artist) => artist.name).join(', '),
+                    src: track.preview_url,
+                }));
+                setSongs(foundSongs);
+            }
+        } catch (error) {
+            console.error("Error fetching songs from Spotify:", error);
         }
     };
 
@@ -29,19 +77,11 @@ function SearchScreen() {
         navigation.navigate('MusicScreen', { song: song });
     };
 
-    const fetchSongs = async () => {
-        try {
-            const response = await axios.get('http://192.168.1.5:3000/api/songs');
-            setSongs(response.data);
-        }
-        catch (error) {
-            console.error('Error fetching songs:', error);
-        }
-    }
-
     useEffect(() => {
-        fetchSongs();
-    }, []);
+        if (isSpotifyLoggedIn) {
+          fetchSongsFromSpotify(accessToken);
+        }
+      }, [value, isSpotifyLoggedIn]);
 
     return (
         <View style={styles.container}>
@@ -61,15 +101,8 @@ function SearchScreen() {
             )}
 
             <ScrollView contentContainerStyle={styles.playlistContainer}>
-                {value === '' ? songs.map((song) => (
-                    <TouchableOpacity key={song.title} style={styles.playlistItem} onPress={() => goToMusicScreen(song)}>
-                        <ImageBackground source={require('../../assets/spotylista.png')} style={styles.imageBackground}>
-                            <AntDesign name="playcircleo" size={30} color="black" style={styles.icono} />
-                        </ImageBackground>
-                        <Text style={styles.playlistItemText}>{song.title}</Text>
-                    </TouchableOpacity>
-                )) : songs.filter(song => song.title.toLowerCase().includes(value.toLowerCase())).map((song) => (
-                    <TouchableOpacity key={song.title} style={styles.playlistItem} onPress={() => goToMusicScreen(song)}>
+                {songs.length > 0 && songs.map((song) => (
+                    <TouchableOpacity key={song.id} style={styles.playlistItem} onPress={() => goToMusicScreen(song)}>
                         <ImageBackground source={require('../../assets/spotylista.png')} style={styles.imageBackground}>
                             <AntDesign name="playcircleo" size={30} color="black" style={styles.icono} />
                         </ImageBackground>
@@ -82,77 +115,7 @@ function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-
-
-    },
-    playlist: {
-        flex: 1,
-        width: '100%',
-
-    },
-    playlistText: {
-        fontSize: 24,
-    },
-    playlistContainer: {
-        width: '100%',
-        alignItems: 'baseline',
-        alignContent: 'baseline',
-
-    },
-    playlistItem: {
-        width: '100%',
-        alignContent: 'baseline',
-        padding: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#ccc',
-        flexDirection: 'row',
-    },
-    playlistItemText: {
-        fontSize: 18,
-        marginLeft: 10,
-    },
-    navbar: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        backgroundColor: '#f0f0f0',
-        paddingVertical: 10,
-        borderTopWidth: 1,
-        borderTopColor: '#ccc',
-        width: '100%',
-    },
-    navItem: {
-        padding: 10,
-    },
-    separator: {
-        marginVertical: 1,
-        borderBottomColor: '#737373',
-        borderBottomWidth: StyleSheet.hairlineWidth,
-    },
-    imageBackground: {
-        width: 'auto%',
-        height: 'auto%',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 10,
-    },
-    imageTitle: {
-        width: '100%',
-        height: '50%',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 50,
-    },
-    textinp: {
-        width: '100%',
-        height: '10%',
-        justifyContent: 'baseline',
-        alignItems: 'baseline',
-        marginTop: 50,
-    },
+    // Rest of your styles...
 });
 
 export default SearchScreen;
